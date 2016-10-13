@@ -16,11 +16,13 @@ DEBUG = False
 VERBOSE = False
 progressbar = None
 
-
+# Pack the nonce into a 256 bit little endian struct?
+# Also update the digest with it
 def hash_nonce(digest, nonce):
     for i in range(8):
         digest.update(struct.pack('<I', nonce >> (32*i)))
 
+# This adds "powcount" to the EquihashGen from the protocol
 def hash_xi(digest, xi):
     digest.update(struct.pack('<I', xi))
     return digest # For chaining
@@ -50,9 +52,17 @@ def xor(ha, hb):
 
 def gbp_basic(digest, n, k):
     '''Implementation of Basic Wagner's algorithm for the GBP.'''
-    collision_length = n/(k+1)
-    hash_length = (k+1)*((collision_length+7)//8)
-    indices_per_hash_output = 512/n
+
+    # The segment of the hash to check
+    collision_length = n/(k+1) # 16 for n=96 k=5
+    print 'Collision Length: {}'.format(collision_length)
+
+    hash_length = (k+1)*((collision_length+7)//8) # 12 for n=96 k=5
+    print "Hash length: {}".format(hash_length)
+
+    # AKA m from EquihashGen in the protocol
+    indices_per_hash_output = 512/n # 5
+    print "Indicies per hash output: {}".format(indices_per_hash_output)
 
     # 1) Generate first list
     if DEBUG: print 'Generating first list'
@@ -60,18 +70,27 @@ def gbp_basic(digest, n, k):
     tmp_hash = ''
     if DEBUG and progressbar: bar = progressbar.ProgressBar()
     else: bar = lambda x: x
-    for i in bar(range(0, 2**(collision_length+1))):
+    list_length = 2**(collision_length+1)
+    print 'List length: {}'.format(list_length)
+    for i in bar(range(0, list_length)):
         r = i % indices_per_hash_output
         if r == 0:
             # X_i = H(I||V||x_i)
             curr_digest = digest.copy()
-            hash_xi(curr_digest, i/indices_per_hash_output)
+            first_list_index = i/indices_per_hash_output
+            hash_xi(curr_digest, first_list_index)
             tmp_hash = curr_digest.digest()
+            if i == 0:
+                print "tmp_hash[0]: {}".format(bytearray(tmp_hash))
         X.append((
             expand_array(bytearray(tmp_hash[r*n/8:(r+1)*n/8]),
                          hash_length, collision_length),
             (i,)
         ))
+
+    for ii in range(0,10):
+        print X[ii]
+        print 'X[i] len {}'.format(len(X[ii][0]))
 
     # 3) Repeat step 2 until 2n/(k+1) bits remain
     for i in range(1, k):
@@ -182,6 +201,7 @@ def difficulty_filter(prev_hash, nonce, soln, d):
 # Demo miner
 #
 
+# This is the "powtag" from the protocol spec
 def zcash_person(n, k):
     return b'ZcashPoW' + struct.pack('<II', n, k)
 
@@ -209,6 +229,10 @@ def mine(n, k, d):
     while True:
         start = datetime.today()
         # H(I||...
+        # The python blake2b takes number of bytes for digest size,
+        # that's why this is divided by 8.
+        # For n = 96 this is (512/96) = 5 * 96 = 480 bits or 60 bytes
+        print 'EquihashGen Blake2b length {} bits or {} bytes'.format((512/n)*n, (512/n)*n/8)
         digest = blake2b(digest_size=(512/n)*n/8, person=zcash_person(n, k))
         digest.update(prev_hash)
         nonce = 0
