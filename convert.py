@@ -4,11 +4,25 @@ import binascii
 word_size = 32
 word_mask = (1<<word_size)-1
 
+times_run = 0
+
+# inp: hash
+# out_len: hash_length
+# bit_len: collision_length
 def expand_array(inp, out_len, bit_len, byte_pad=0):
+    global times_run
+    times_run = times_run + 1
+    debug = times_run < 0
+    if debug:
+        print 'expand_array {}, {}'.format(out_len, bit_len)
     assert bit_len >= 8 and word_size >= 7+bit_len
     bit_len_mask = (1<<bit_len)-1
+    if debug:
+        print 'bit_len_mask: {0:b}'.format(bit_len_mask)
 
     out_width = (bit_len+7)/8 + byte_pad
+    if debug:
+        print 'out_width: {}'.format(out_width)
     assert out_len == 8*out_width*len(inp)/bit_len
     out = bytearray(out_len)
 

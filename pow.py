@@ -6,6 +6,7 @@ from datetime import datetime
 from operator import itemgetter
 from pyblake2 import blake2b
 import struct
+import binascii
 
 from convert import (
     compress_array,
@@ -62,7 +63,7 @@ def gbp_basic(digest, n, k):
 
     # AKA m from EquihashGen in the protocol
     indices_per_hash_output = 512/n # 5
-    print "Indicies per hash output: {}".format(indices_per_hash_output)
+    print "Indicies per hash output m: {}".format(indices_per_hash_output)
 
     # 1) Generate first list
     if DEBUG: print 'Generating first list'
@@ -73,24 +74,32 @@ def gbp_basic(digest, n, k):
     list_length = 2**(collision_length+1)
     print 'List length: {}'.format(list_length)
     for i in bar(range(0, list_length)):
+        proto_i = i + 1
+        # if i <= 14:
+        #     print 'Protocol i: {}'.format(proto_i)
+        #     print 'h: {}'.format((proto_i - 1 % indices_per_hash_output) * n)
         r = i % indices_per_hash_output
         if r == 0:
             # X_i = H(I||V||x_i)
             curr_digest = digest.copy()
-            first_list_index = i/indices_per_hash_output
-            hash_xi(curr_digest, first_list_index)
+            powcount_m = i/indices_per_hash_output
+            # if i <= 14:
+            #     print 'powcount_m: {}'.format(powcount_m)
+            hash_xi(curr_digest, powcount_m)
             tmp_hash = curr_digest.digest()
-            if i == 0:
-                print "tmp_hash[0]: {}".format(bytearray(tmp_hash))
+            # if i <= 14:
+            #     print binascii.hexlify(tmp_hash)
+        # if i <= 14:
+        #     print 'tmp_hash indexes: {}:{}'.format(r*n/8, (r+1)*n/8)
         X.append((
             expand_array(bytearray(tmp_hash[r*n/8:(r+1)*n/8]),
                          hash_length, collision_length),
             (i,)
         ))
 
-    for ii in range(0,10):
-        print X[ii]
-        print 'X[i] len {}'.format(len(X[ii][0]))
+    # for ii in range(0,7):
+    #     print 'X[ii][0]: {}'.format(binascii.hexlify(X[ii][0]))
+    #     print 'X[i] len {}'.format(len(X[ii][0]))
 
     # 3) Repeat step 2 until 2n/(k+1) bits remain
     for i in range(1, k):
